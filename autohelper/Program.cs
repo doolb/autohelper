@@ -48,7 +48,7 @@ namespace autohelper
                         desc.isDefault = true;
                         break;
                     default:
-                        if (m.Contains('~'))
+                        if (m.StartsWith('~'))
                             desc.queue = -1;
                         else
                             desc.queue = ToInt(m);
@@ -374,7 +374,8 @@ namespace autohelper
                         play = true;
                         break;
                     default:
-                        int.TryParse(k, out delay);
+                        if (!string.IsNullOrEmpty(k))
+                            int.TryParse(k, out delay);
                         Console.WriteLine($"delay {delay}");
                         break;
                 }
