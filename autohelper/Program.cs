@@ -356,9 +356,11 @@ namespace autohelper
         private static bool autoload = false;
         private static bool record = false;
         private static bool play = false;
+        private static bool adb = false;
 
         static void Main(string[] args)
         {
+            bool tes = false;
             int delay = 500;
             parseKey(Process.GetCurrentProcess().ProcessName, (m, k) =>
             {
@@ -373,6 +375,12 @@ namespace autohelper
                     case "play":
                         play = true;
                         break;
+                    case "test":
+                        tes = true;
+                        break;
+                    case "adb":
+                        adb = true;
+                        break;
                     default:
                         if (!string.IsNullOrEmpty(k))
                             int.TryParse(k, out delay);
@@ -382,12 +390,20 @@ namespace autohelper
             });
             loadimg();
 
+            if (tes)
+            {
+                test();
+                return;
+            }
+
             if (play)
                 clickrecord(delay);
             else
                 clickimage(delay);
+        }
 
-            return;
+        private static void test()
+        {
             Mat cv1 = Cv2.ImRead("./1.png");
             cv1.ConvertTo(cv1, MatType.CV_32FC1);
             Mat cv2 = Cv2.ImRead("./2.png");
@@ -404,7 +420,7 @@ namespace autohelper
             int y = maxLoc.Y;
             int w = maxLoc.X + cv1.Width;
             int h = maxLoc.Y + cv1.Height;
-            
+
             cv2 = Cv2.ImRead("./2.png");
             Cv2.Rectangle(cv2, new Point(x, y), new Point(w, h), new Scalar(255, 0, 0), 3);
             Cv2.ImShow("window", cv2);
@@ -413,8 +429,6 @@ namespace autohelper
 
             Console.WriteLine(r2.ToString());
             Cv2.WaitKey(0);
-
-            return;
 
         }
 
