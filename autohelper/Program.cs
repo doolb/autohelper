@@ -22,6 +22,7 @@ namespace autohelper
         public string name;
         public string dir;
         public bool loop;
+        public bool isDefault;
         public static ImgDesc Parse(string dir, string ms)
         {
             ImgDesc desc = new ImgDesc();
@@ -32,10 +33,19 @@ namespace autohelper
                 switch (m)
                 {
                     case "select":
-                        desc.selectImage = k.Replace('&', '@');
+                        desc.selectImage = k.Replace('&', '@').Replace('_', ',');
                         break;
                     case "loop":
                         desc.loop = true;
+                        break;
+                    case "clickpoint":
+                        var cps = k.Split('&');
+                        double x = double.Parse(cps[0]);
+                        double y = double.Parse(cps[1]);
+                        desc.clickPoint = new[] { x, y };
+                        break;
+                    case "default":
+                        desc.isDefault = true;
                         break;
                     default:
                         if (m.Contains('~'))
@@ -99,14 +109,17 @@ namespace autohelper
                 Cv2.CvtColor(src, src, ColorConversionCodes.BGRA2BGR, 3);
                 src.ConvertTo(src, MatType.CV_32FC3);
 
+                Console.WriteLine(lines[i]);
 
                 ImgDesc lastfd = null;
                 Rect rect = new Rect();
                 Action click = () =>
                 {
                     i++;
-                    Console.WriteLine($"click {lastfd.name} {rect.X + rect.Width / 2} {rect.Y + rect.Height / 2}");
-                    MouseOperations.SetCursorPosition(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
+                    int px = rect.X + (int)(rect.Width * lastfd.clickPoint[0]);
+                    int py = rect.Y + (int)(rect.Height * lastfd.clickPoint[1]);
+                    Console.WriteLine($"click {lastfd.name} {px} {py}");
+                    MouseOperations.SetCursorPosition(px, py);
                     Cv2.WaitKey(30);
                     MouseOperations.MouseEvent(MouseOperations.MouseEventFlags.LeftDown);
                     Cv2.WaitKey(30);
@@ -187,8 +200,10 @@ namespace autohelper
                             writer.WriteLine(lastfd.name);
                         }
                     }
-                    Console.WriteLine($"click {lastfd.name} {rect.X + rect.Width / 2} {rect.Y + rect.Height / 2}");
-                    MouseOperations.SetCursorPosition(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
+                    int px = rect.X + (int)(rect.Width * lastfd.clickPoint[0]);
+                    int py = rect.Y + (int)(rect.Height * lastfd.clickPoint[1]);
+                    Console.WriteLine($"click {lastfd.name} {px} {py}");
+                    MouseOperations.SetCursorPosition(px, py);
                     Cv2.WaitKey(30);
                     MouseOperations.MouseEvent(MouseOperations.MouseEventFlags.LeftDown);
                     Cv2.WaitKey(30);
@@ -244,6 +259,25 @@ namespace autohelper
                                 }
                                 break;
                             }
+                        }
+                    }
+                }
+                else
+                {
+                    var em = clickimg.GetEnumerator();
+                    while (em.MoveNext())
+                    {
+                        if (em.Current.Key.isDefault)
+                        {
+                            double val = em.Current.Key.ide;
+                            var r = search(out rect, src, em.Current.Value);
+                            Console.WriteLine($"default {em.Current.Key.name}: {r} {r >= val}");
+                            if (r > em.Current.Key.ide)
+                            {
+                                lastfd = em.Current.Key;
+                                click();
+                            }
+                            break;
                         }
                     }
                 }
