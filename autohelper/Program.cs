@@ -13,6 +13,7 @@ using SharpAdbClient;
 using static MouseOperations;
 using Encoder = System.Drawing.Imaging.Encoder;
 using Image = System.Drawing.Image;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace autohelper
 {
@@ -143,7 +144,8 @@ namespace autohelper
             int i = 0;
             while (i < lines.Length)
             {
-                Mat src = BitmapConverter.ToMat(makeScreenshot());
+                Mat src = makeScreenshot();
+                
                 Cv2.CvtColor(src, src, ColorConversionCodes.BGRA2BGR, 3);
                 src.ConvertTo(src, MatType.CV_32FC3);
 
@@ -221,7 +223,7 @@ namespace autohelper
                 if(autoload)
                     loadimg();
 
-                Mat src = BitmapConverter.ToMat(makeScreenshot());
+                Mat src = makeScreenshot();
                 //src.CvtColor(ColorConversionCodes.RGBA2RGB, 3);
                 Cv2.CvtColor(src, src, ColorConversionCodes.BGRA2BGR, 3);
                 src.ConvertTo(src, MatType.CV_32FC3);
@@ -462,8 +464,15 @@ namespace autohelper
 
             if (screenshot)
             {
-                var img = makeScreenshot();
-                img.Save("./screenshot.bmp");
+                if (adb)
+                {
+                    makeScreenshotAdb();
+                }
+                else
+                {
+                    var img = makeScreenshotbmp();
+                    img.Save("./screenshot.bmp");
+                }
                 return;
             }
 
@@ -503,10 +512,16 @@ namespace autohelper
 
         }
 
-        public static Bitmap makeScreenshot()
+        public static Mat makeScreenshot()
         {
-            if (screenshotadb)
+            if (adb)
                 return makeScreenshotAdb();
+            else
+                return BitmapConverter.ToMat(makeScreenshotbmp());
+        }
+
+        public static Bitmap makeScreenshotbmp()
+        {
             Bitmap screenshot = new Bitmap(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height, PixelFormat.Format32bppArgb);
 
             Graphics gfxScreenshot = Graphics.FromImage(screenshot);
@@ -519,33 +534,17 @@ namespace autohelper
         }
 
         public static bool adb = false;
-        public static bool screenshotadb = false;
         private static string adbport = "5555";
-        private static AdbServer adbServer;
-        private static AdbClient adbClient;
-        private static DeviceData device;
-        private static ConsoleOutputReceiver receiver;
 
         private static void initAdb(bool _screenshotadb)
         {
             adb = true;
-            screenshotadb = _screenshotadb;
-            adbServer = new AdbServer();
-            adbServer.StartServer(@".\adb.exe", false);
-            adbClient = new AdbClient((EndPoint)new IPEndPoint(IPAddress.Loopback, int.Parse(adbport)), (endPoint =>
-            {
-                endPoint = (EndPoint)new IPEndPoint(IPAddress.Loopback, int.Parse(adbport));
-                Console.WriteLine($"connect {endPoint}");
-                return (IAdbSocket)new AdbSocket(endPoint);
-            }));
         }
 
-        public static Bitmap makeScreenshotAdb()
+        public static Mat makeScreenshotAdb()
         {
-            //adbClient.ExecuteRemoteCommand($"screencap -p", adbClient.GetDevices().First(), receiver);
-            Image img = adbClient.GetFrameBufferAsync(adbClient.GetDevices().First(), CancellationToken.None)
-                .GetAwaiter().GetResult();
-            return (Bitmap)img;
+            Process.Start(new ProcessStartInfo("adb.exe", $"exec-out screencap -p > adb.png"))?.WaitForExit(-1);
+            return Cv2.ImRead("adb.png");
         }
 
         private static int adb_x, adb_y;
@@ -567,16 +566,8 @@ namespace autohelper
             {
                 if (value == MouseOperations.MouseEventFlags.LeftUp)
                 {
-                    if (screenshotadb)
-                    {
-                        adbClient.ExecuteRemoteCommand($"input tap {adb_x} {adb_y}", adbClient.GetDevices().First(),
-                            receiver);
-                    }
-                    else
-                    {
-                        double scale = double.Parse(adbport);
-                        Process.Start(new ProcessStartInfo("adb.exe", $"shell input tap {adb_x * scale} {adb_y * scale}"))?.WaitForExit(-1);
-                    }
+                    double scale = 1;
+                    Process.Start(new ProcessStartInfo("adb.exe", $"shell input tap {adb_x * scale} {adb_y * scale}"))?.WaitForExit(-1);
                 }
             }
             else
