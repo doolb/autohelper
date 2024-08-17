@@ -8,6 +8,7 @@ using static System.Windows.Forms.AxHost;
 using System.Diagnostics;
 using System.Text;
 using OpenCvSharp.Features2D;
+using SharpAdbClient;
 
 namespace autohelper
 {
@@ -78,12 +79,16 @@ namespace autohelper
     {
         private static Dictionary<ImgDesc, Mat> clickimg = new Dictionary<ImgDesc, Mat>();
         private static StringBuilder records = new StringBuilder();
+        private static Dictionary<ImgDesc, Mat> defaultimg = new Dictionary<ImgDesc, Mat>();
+        private static Random rand;
 
         static void loadimg()
         {
             clickimg.Clear();
-            var dir = Directory.GetDirectories("./","*", SearchOption.TopDirectoryOnly);
-            foreach (var s in dir)
+            defaultimg.Clear();
+            rand = new Random(DateTime.Now.Second);
+
+            Action<string> loaddir = (s) =>
             {
                 var sd = Path.GetFileName(s);
                 var files = Directory.GetFiles("./" + s, "*.png", SearchOption.AllDirectories);
@@ -95,6 +100,21 @@ namespace autohelper
 
                     var desc = ImgDesc.Parse(sd, sf);
                     clickimg.Add(desc, src);
+                    if (desc.isDefault)
+                        defaultimg.Add(desc, src);
+                }
+            };
+
+            if (!string.IsNullOrEmpty(imgdir))
+            {
+                loaddir(imgdir);
+            }
+            else
+            {
+                var dir = Directory.GetDirectories("./", "*", SearchOption.TopDirectoryOnly);
+                foreach (var s in dir)
+                {
+                    loaddir(s);
                 }
             }
         }
@@ -262,23 +282,19 @@ namespace autohelper
                         }
                     }
                 }
-                else
+                else if (defaultimg.Count > 0)
                 {
-                    var em = clickimg.GetEnumerator();
-                    while (em.MoveNext())
+                    var list = defaultimg.ToList();
+                    int idx = rand.Next(0, list.Count);
+
+                    var desc = list[idx];
+                    double val = desc.Key.ide;
+                    var r = search(out rect, src, desc.Value);
+                    Console.WriteLine($"default {desc.Key.name}: {r} {r >= val}");
+                    if (r > desc.Key.ide)
                     {
-                        if (em.Current.Key.isDefault)
-                        {
-                            double val = em.Current.Key.ide;
-                            var r = search(out rect, src, em.Current.Value);
-                            Console.WriteLine($"default {em.Current.Key.name}: {r} {r >= val}");
-                            if (r > em.Current.Key.ide)
-                            {
-                                lastfd = em.Current.Key;
-                                click();
-                            }
-                            break;
-                        }
+                        lastfd = desc.Key;
+                        click();
                     }
                 }
 
@@ -356,13 +372,15 @@ namespace autohelper
         private static bool autoload = false;
         private static bool record = false;
         private static bool play = false;
-        private static bool adb = false;
+
+        private static string imgdir = "";
 
         static void Main(string[] args)
         {
             bool tes = false;
             int delay = 500;
-            parseKey(Process.GetCurrentProcess().ProcessName, (m, k) =>
+
+            Action<string, string> useKey = (m, k) =>
             {
                 switch (m)
                 {
@@ -379,7 +397,10 @@ namespace autohelper
                         tes = true;
                         break;
                     case "adb":
-                        adb = true;
+                        initAdb();
+                        break;
+                    case "imgdir":
+                        imgdir = k;
                         break;
                     default:
                         if (!string.IsNullOrEmpty(k))
@@ -387,7 +408,19 @@ namespace autohelper
                         Console.WriteLine($"delay {delay}");
                         break;
                 }
+            };
+
+            parseKey(Process.GetCurrentProcess().ProcessName, (m, k) =>
+            {
+                useKey(m, k);
             });
+            if (args.Length > 0)
+            {
+                parseKey(args[0], (m, k) =>
+                {
+                    useKey(m, k);
+                });
+            }
             loadimg();
 
             if (tes)
@@ -434,6 +467,8 @@ namespace autohelper
 
         public static Bitmap makeScreenshot()
         {
+            if (adb)
+                return makeScreenshotAdb();
             Bitmap screenshot = new Bitmap(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height, PixelFormat.Format32bppArgb);
 
             Graphics gfxScreenshot = Graphics.FromImage(screenshot);
@@ -443,6 +478,23 @@ namespace autohelper
             gfxScreenshot.Dispose();
 
             return screenshot;
+        }
+
+        private static bool adb = false;
+        private static AdbServer adbServer;
+        private static DeviceData device;
+        private static ConsoleOutputReceiver receiver;
+
+        private static void initAdb()
+        {
+            adb = true;
+            adbServer = new AdbServer();
+            adbServer.StartServer("./adb.exe", false);
+        }
+
+        public static Bitmap makeScreenshotAdb()
+        {
+            return null;
         }
     }
 }
