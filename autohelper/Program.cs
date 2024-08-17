@@ -11,6 +11,7 @@ using System.Text;
 using OpenCvSharp.Features2D;
 using SharpAdbClient;
 using static MouseOperations;
+using Encoder = System.Drawing.Imaging.Encoder;
 using Image = System.Drawing.Image;
 
 namespace autohelper
@@ -420,8 +421,13 @@ namespace autohelper
                         screenshot = true;
                         break;
                     case "adb":
-                        initAdb();
+                        initAdb(false);
                         if(!string.IsNullOrEmpty(k))
+                            adbport = k;
+                        break;
+                    case "sadb":
+                        initAdb(true);
+                        if (!string.IsNullOrEmpty(k))
                             adbport = k;
                         break;
                     case "imgdir":
@@ -499,7 +505,7 @@ namespace autohelper
 
         public static Bitmap makeScreenshot()
         {
-            if (adb)
+            if (screenshotadb)
                 return makeScreenshotAdb();
             Bitmap screenshot = new Bitmap(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height, PixelFormat.Format32bppArgb);
 
@@ -513,18 +519,25 @@ namespace autohelper
         }
 
         public static bool adb = false;
+        public static bool screenshotadb = false;
         private static string adbport = "5555";
         private static AdbServer adbServer;
         private static AdbClient adbClient;
         private static DeviceData device;
         private static ConsoleOutputReceiver receiver;
 
-        private static void initAdb()
+        private static void initAdb(bool _screenshotadb)
         {
             adb = true;
+            screenshotadb = _screenshotadb;
             adbServer = new AdbServer();
-            adbServer.StartServer("./adb.exe", false);
-            adbClient = new AdbClient((EndPoint)new IPEndPoint(IPAddress.Loopback, int.Parse(adbport)), Factories.AdbSocketFactory);
+            adbServer.StartServer(@".\adb.exe", false);
+            adbClient = new AdbClient((EndPoint)new IPEndPoint(IPAddress.Loopback, int.Parse(adbport)), (endPoint =>
+            {
+                endPoint = (EndPoint)new IPEndPoint(IPAddress.Loopback, int.Parse(adbport));
+                Console.WriteLine($"connect {endPoint}");
+                return (IAdbSocket)new AdbSocket(endPoint);
+            }));
         }
 
         public static Bitmap makeScreenshotAdb()
@@ -552,8 +565,19 @@ namespace autohelper
         {
             if (adb)
             {
-                if(value == MouseOperations.MouseEventFlags.LeftUp)
-                    adbClient.ExecuteRemoteCommand($"tap {adb_x} {adb_y}", adbClient.GetDevices().First(), receiver);
+                if (value == MouseOperations.MouseEventFlags.LeftUp)
+                {
+                    if (screenshotadb)
+                    {
+                        adbClient.ExecuteRemoteCommand($"input tap {adb_x} {adb_y}", adbClient.GetDevices().First(),
+                            receiver);
+                    }
+                    else
+                    {
+                        double scale = double.Parse(adbport);
+                        Process.Start(new ProcessStartInfo("adb.exe", $"shell input tap {adb_x * scale} {adb_y * scale}"))?.WaitForExit(-1);
+                    }
+                }
             }
             else
             {
