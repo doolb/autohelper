@@ -14,6 +14,7 @@ using static MouseOperations;
 using Encoder = System.Drawing.Imaging.Encoder;
 using Image = System.Drawing.Image;
 using static System.Formats.Asn1.AsnWriter;
+using System.Runtime.ConstrainedExecution;
 
 namespace autohelper
 {
@@ -427,11 +428,6 @@ namespace autohelper
                         if(!string.IsNullOrEmpty(k))
                             adbport = k;
                         break;
-                    case "sadb":
-                        initAdb(true);
-                        if (!string.IsNullOrEmpty(k))
-                            adbport = k;
-                        break;
                     case "imgdir":
                         imgdir = k;
                         break;
@@ -543,7 +539,39 @@ namespace autohelper
 
         public static Mat makeScreenshotAdb()
         {
-            Process.Start(new ProcessStartInfo("adb.exe", $"exec-out screencap -p > adb.png"))?.WaitForExit(-1);
+            Process pr2 = new Process();
+            pr2.StartInfo.FileName = @"c:\windows\system32\cmd.exe";
+            pr2.StartInfo.Arguments = "/c \"adb.exe exec-out screencap -p > adb.png\"";
+            pr2.Start();
+            pr2.WaitForExit();
+
+            return Cv2.ImRead("adb.png");
+
+
+
+            var outputStream = new StreamWriter("adb.png");
+            Process process = new Process();
+            process.StartInfo.FileName = "adb.exe";
+            process.StartInfo.Arguments = "exec-out screencap -p";
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.OutputDataReceived += new DataReceivedEventHandler((sender, e) =>
+            {
+                if (!String.IsNullOrEmpty(e.Data))
+                {
+                    outputStream.WriteLine(e.Data);
+                }
+            });
+
+            process.Start();
+
+            process.BeginOutputReadLine();
+
+            process.WaitForExit();
+            process.Close();
+
+            outputStream.Close();
+            
             return Cv2.ImRead("adb.png");
         }
 
