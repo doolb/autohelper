@@ -6,9 +6,12 @@ using Point = OpenCvSharp.Point;
 using static System.Net.Mime.MediaTypeNames;
 using static System.Windows.Forms.AxHost;
 using System.Diagnostics;
+using System.Net;
 using System.Text;
 using OpenCvSharp.Features2D;
 using SharpAdbClient;
+using static MouseOperations;
+using Image = System.Drawing.Image;
 
 namespace autohelper
 {
@@ -91,20 +94,31 @@ namespace autohelper
             defaultimg.Clear();
             rand = new Random(DateTime.Now.Second);
 
+            Action<string, string> loadfile = (sd, file) =>
+            {
+                var sf = Path.GetFileNameWithoutExtension(file);
+                var src = Cv2.ImRead(file);
+                src.ConvertTo(src, MatType.CV_32FC3);
+
+                var desc = ImgDesc.Parse(sd, sf);
+                clickimg.Add(desc, src);
+                if (desc.isDefault)
+                    defaultimg.Add(desc, src);
+            };
+
             Action<string> loaddir = (s) =>
             {
                 var sd = Path.GetFileName(s);
                 var files = Directory.GetFiles("./" + s, "*.png", SearchOption.AllDirectories);
                 foreach (var file in files)
                 {
-                    var sf = Path.GetFileNameWithoutExtension(file);
-                    var src = Cv2.ImRead(file);
-                    src.ConvertTo(src, MatType.CV_32FC3);
+                    loadfile(sd, file);
+                }
 
-                    var desc = ImgDesc.Parse(sd, sf);
-                    clickimg.Add(desc, src);
-                    if (desc.isDefault)
-                        defaultimg.Add(desc, src);
+                files = Directory.GetFiles("./" + s, "*.bmp", SearchOption.AllDirectories);
+                foreach (var file in files)
+                {
+                    loadfile(sd, file);
                 }
             };
 
@@ -142,11 +156,11 @@ namespace autohelper
                     int px = rect.X + (int)(rect.Width * lastfd.clickPoint[0]);
                     int py = rect.Y + (int)(rect.Height * lastfd.clickPoint[1]);
                     Console.WriteLine($"click {lastfd.name} {px} {py}");
-                    MouseOperations.SetCursorPosition(px, py);
+                    SetCursorPosition(px, py);
                     Cv2.WaitKey(30);
-                    MouseOperations.MouseEvent(MouseOperations.MouseEventFlags.LeftDown);
+                    MouseEvent(MouseOperations.MouseEventFlags.LeftDown);
                     Cv2.WaitKey(30);
-                    MouseOperations.MouseEvent(MouseOperations.MouseEventFlags.LeftUp);
+                    MouseEvent(MouseOperations.MouseEventFlags.LeftUp);
                     Cv2.WaitKey(30);
                 };
 
@@ -226,11 +240,11 @@ namespace autohelper
                     int px = rect.X + (int)(rect.Width * lastfd.clickPoint[0]);
                     int py = rect.Y + (int)(rect.Height * lastfd.clickPoint[1]);
                     Console.WriteLine($"click {lastfd.name} {px} {py}");
-                    MouseOperations.SetCursorPosition(px, py);
+                    SetCursorPosition(px, py);
                     Cv2.WaitKey(30);
-                    MouseOperations.MouseEvent(MouseOperations.MouseEventFlags.LeftDown);
+                    MouseEvent(MouseOperations.MouseEventFlags.LeftDown);
                     Cv2.WaitKey(30);
-                    MouseOperations.MouseEvent(MouseOperations.MouseEventFlags.LeftUp);
+                    MouseEvent(MouseOperations.MouseEventFlags.LeftUp);
                     Cv2.WaitKey(30);
                 };
                 if (lastfd != null && lastfd.loop)
@@ -385,7 +399,7 @@ namespace autohelper
         {
             bool tes = false;
             int delay = 500;
-
+            bool screenshot = false;
             Action<string, string> useKey = (m, k) =>
             {
                 switch (m)
@@ -402,8 +416,13 @@ namespace autohelper
                     case "test":
                         tes = true;
                         break;
+                    case "screenshot":
+                        screenshot = true;
+                        break;
                     case "adb":
                         initAdb();
+                        if(!string.IsNullOrEmpty(k))
+                            adbport = k;
                         break;
                     case "imgdir":
                         imgdir = k;
@@ -432,6 +451,13 @@ namespace autohelper
             if (tes)
             {
                 test();
+                return;
+            }
+
+            if (screenshot)
+            {
+                var img = makeScreenshot();
+                img.Save("./screenshot.bmp");
                 return;
             }
 
@@ -486,8 +512,10 @@ namespace autohelper
             return screenshot;
         }
 
-        private static bool adb = false;
+        public static bool adb = false;
+        private static string adbport = "5555";
         private static AdbServer adbServer;
+        private static AdbClient adbClient;
         private static DeviceData device;
         private static ConsoleOutputReceiver receiver;
 
@@ -496,11 +524,41 @@ namespace autohelper
             adb = true;
             adbServer = new AdbServer();
             adbServer.StartServer("./adb.exe", false);
+            adbClient = new AdbClient((EndPoint)new IPEndPoint(IPAddress.Loopback, int.Parse(adbport)), Factories.AdbSocketFactory);
         }
 
         public static Bitmap makeScreenshotAdb()
         {
-            return null;
+            //adbClient.ExecuteRemoteCommand($"screencap -p", adbClient.GetDevices().First(), receiver);
+            Image img = adbClient.GetFrameBufferAsync(adbClient.GetDevices().First(), CancellationToken.None)
+                .GetAwaiter().GetResult();
+            return (Bitmap)img;
+        }
+
+        private static int adb_x, adb_y;
+        public static void SetCursorPosition(int x, int y)
+        {
+            if (adb)
+            {
+                adb_x = x;
+                adb_y = y;
+            }
+            else
+            {
+                MouseOperations.SetCursorPosition(x, y);
+            }
+        }
+        public static void MouseEvent(MouseOperations.MouseEventFlags value)
+        {
+            if (adb)
+            {
+                if(value == MouseOperations.MouseEventFlags.LeftUp)
+                    adbClient.ExecuteRemoteCommand($"tap {adb_x} {adb_y}", adbClient.GetDevices().First(), receiver);
+            }
+            else
+            {
+                MouseOperations.MouseEvent(value);
+            }
         }
     }
 }
