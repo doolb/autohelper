@@ -48,6 +48,9 @@ namespace autohelper
                     case "default":
                         desc.isDefault = true;
                         break;
+                    case "delay":
+                        desc.delay = int.Parse(k);
+                        break;
                     default:
                         if (m.StartsWith('~'))
                             desc.queue = -1;
@@ -299,7 +302,10 @@ namespace autohelper
                 }
 
                 GC.Collect();
-                Cv2.WaitKey(delay);
+                if(lastfd != null && lastfd.delay > 0)
+                    Cv2.WaitKey(lastfd.delay);
+                else
+                    Cv2.WaitKey(delay);
             }
         }
 
