@@ -1,20 +1,10 @@
 ﻿using OpenCvSharp;
-using System.Drawing;
 using System.Drawing.Imaging;
 using OpenCvSharp.Extensions;
 using Point = OpenCvSharp.Point;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Windows.Forms.AxHost;
 using System.Diagnostics;
-using System.Net;
 using System.Text;
-using OpenCvSharp.Features2D;
-using SharpAdbClient;
-using static MouseOperations;
-using Encoder = System.Drawing.Imaging.Encoder;
-using Image = System.Drawing.Image;
-using static System.Formats.Asn1.AsnWriter;
-using System.Runtime.ConstrainedExecution;
+using Microsoft.CSharp;
 
 namespace autohelper
 {
@@ -29,6 +19,8 @@ namespace autohelper
         public string name;
         public string dir;
         public bool loop;
+        public bool abpoint = false;
+        public bool wait = false;
         public bool isDefault;
         public static ImgDesc Parse(string dir, string ms)
         {
@@ -45,12 +37,29 @@ namespace autohelper
                     case "loop":
                         desc.loop = true;
                         break;
-                    case "clickpoint":
+                    case "clickpoint_ab":
+                    {
+                        desc.abpoint = true;
                         var cps = k.Split('&');
                         double x = double.Parse(cps[0]);
                         double y = double.Parse(cps[1]);
                         desc.clickPoint = new[] { x, y };
                         break;
+                        }
+
+                    case "clickpoint":
+                    {
+                        var cps = k.Split('&');
+                        double x = double.Parse(cps[0]);
+                        double y = double.Parse(cps[1]);
+                        desc.clickPoint = new[] { x, y };
+                        break;
+                        }
+                    case "wait":
+                    {
+                        desc.wait = true;
+                        break;
+                    }
                     case "default":
                         desc.isDefault = true;
                         break;
@@ -243,7 +252,15 @@ namespace autohelper
                     }
                     int px = rect.X + (int)(rect.Width * lastfd.clickPoint[0]);
                     int py = rect.Y + (int)(rect.Height * lastfd.clickPoint[1]);
+                    if (lastfd.abpoint)
+                    {
+                        px = src.Width / 2;
+                        py = src.Height / 2;
+                        Console.WriteLine($"ab point {px} {py}");
+                    }
                     Console.WriteLine($"click {lastfd.name} {px} {py}");
+                    if (lastfd.wait)
+                        return;
                     SetCursorPosition(px, py);
                     Cv2.WaitKey(30);
                     MouseEvent(MouseOperations.MouseEventFlags.LeftDown);
@@ -546,8 +563,6 @@ namespace autohelper
             pr2.WaitForExit();
 
             return Cv2.ImRead("adb.png");
-
-
 
             var outputStream = new StreamWriter("adb.png");
             Process process = new Process();
