@@ -3,6 +3,7 @@ using System.Drawing.Imaging;
 using OpenCvSharp.Extensions;
 using Point = OpenCvSharp.Point;
 using System.Diagnostics;
+using System.DirectoryServices.ActiveDirectory;
 using System.Text;
 using Microsoft.CSharp;
 
@@ -442,8 +443,16 @@ namespace autohelper
                         break;
                     case "adb":
                         initAdb(false);
-                        if(!string.IsNullOrEmpty(k))
-                            adbport = k;
+                        if (!string.IsNullOrEmpty(k))
+                        {
+                            if (!string.IsNullOrEmpty(k))
+                            {
+                                if (k.Contains(":"))
+                                    adbport = $"-s {k} ";
+                                else
+                                    adbport = $"-s 127.0.0.1:{k} ";
+                            }
+                        }
                         break;
                     case "imgdir":
                         imgdir = k;
@@ -547,7 +556,7 @@ namespace autohelper
         }
 
         public static bool adb = false;
-        private static string adbport = "5555";
+        private static string adbport = "";
 
         private static void initAdb(bool _screenshotadb)
         {
@@ -558,7 +567,7 @@ namespace autohelper
         {
             Process pr2 = new Process();
             pr2.StartInfo.FileName = @"c:\windows\system32\cmd.exe";
-            pr2.StartInfo.Arguments = "/c \"adb.exe exec-out screencap -p > adb.png\"";
+            pr2.StartInfo.Arguments = $"/c \"adb.exe {adbport}exec-out screencap -p > adb.png\"";
             pr2.Start();
             pr2.WaitForExit();
 
@@ -610,7 +619,7 @@ namespace autohelper
                 if (value == MouseOperations.MouseEventFlags.LeftUp)
                 {
                     double scale = 1;
-                    Process.Start(new ProcessStartInfo("adb.exe", $"shell input tap {adb_x * scale} {adb_y * scale}"))?.WaitForExit(-1);
+                    Process.Start(new ProcessStartInfo("adb.exe", $"{adbport}shell input tap {adb_x * scale} {adb_y * scale}"))?.WaitForExit(-1);
                 }
             }
             else
