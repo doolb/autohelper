@@ -7,6 +7,8 @@ using System.DirectoryServices.ActiveDirectory;
 using System.Text;
 using Microsoft.CSharp;
 
+
+// todo gpu acc, location game window, call return
 namespace autohelper
 {
     class ImgDesc
